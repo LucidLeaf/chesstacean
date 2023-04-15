@@ -1,10 +1,10 @@
-use crate::board_state::{get_piece_moves_disregarding_checks, BoardState};
+use crate::board_state::{get_piece_moves_disregarding_checks, BoardState, PositionVector};
 use std::io;
 use std::time::Instant;
 
 mod board_state;
 
-fn notation_to_coordinates(input: String) -> Result<(i32, i32), &'static str> {
+fn notation_to_coordinates(input: String) -> Result<PositionVector, &'static str> {
     if input.len() != 2 {
         return Err("Invalid input length");
     }
@@ -17,7 +17,7 @@ fn notation_to_coordinates(input: String) -> Result<(i32, i32), &'static str> {
     if !["1", "2", "3", "4", "5", "6", "7", "8"].contains(&row_string) {
         return Err("Invalid row");
     }
-    let column = match column_string {
+    let col = match column_string {
         "a" => 0,
         "b" => 1,
         "c" => 2,
@@ -29,7 +29,15 @@ fn notation_to_coordinates(input: String) -> Result<(i32, i32), &'static str> {
         _ => 0,
     };
     let row: i32 = row_string.parse().expect("Not a number");
-    return Ok((row - 1, column));
+    return Ok(PositionVector { row: row - 1, col });
+}
+
+fn coordinates_to_notation(input: PositionVector) -> String {
+    let row = char::from_digit((input.row + 1) as u32, 10).expect("Invalid coordinate");
+    let col: char = char::from(97u8 + input.col as u8);
+    let mut result = col.to_string();
+    result.push(row);
+    return result;
 }
 
 fn read_line(prompt: &str) -> String {
@@ -42,9 +50,9 @@ fn read_line(prompt: &str) -> String {
 
 fn main() {
     let bs: BoardState = board_state::new();
-    board_state::print_state(&bs);
     loop {
-        let mut input = read_line("Provide coordinates of piece to move:");
+        board_state::print_state(&bs);
+        let input = read_line("Provide coordinates of piece to move:");
         let coordinates = match notation_to_coordinates(input) {
             Ok(c) => c,
             Err(e) => {
@@ -60,9 +68,9 @@ fn main() {
             println!("no possible moves");
         }
         for i in 0..moves.len() {
-            println!("{0}: ({1}, {2})", i, moves[i].0, moves[i].1);
+            println!("{0}: {1}", i, coordinates_to_notation(coordinates + moves[i]));
         }
-        let mut move_number: i32 = loop {
+        let move_number: i32 = loop {
             let number: i32 = read_line("select move").parse().expect("Not a number");
             if number < moves.len() as i32 || number >= 0 {
                 break number;
