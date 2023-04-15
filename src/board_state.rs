@@ -10,8 +10,8 @@ const BISHOP: i32 = 4;
 const QUEEN: i32 = 5;
 const KING: i32 = 6;
 
-const WHITE: i32 = 8;
-const BLACK: i32 = 16;
+pub const WHITE: i32 = 8;
+pub const BLACK: i32 = 16;
 
 const INVALID_POSITION: PositionVector = PositionVector { row: 1234567890, col: 1234567890 };
 const PIECE_MASK: i32 = 7;
@@ -53,6 +53,37 @@ impl BoardState {
         }
         return self.board[position.row as usize][position.col as usize];
     }
+
+    fn str(state: &BoardState) -> String {
+        let mut result = String::new();
+        fn piece_string_representation(piece: i32) -> String {
+            let colorless_piece = piece & PIECE_MASK;
+            let char = match colorless_piece {
+                PAWN => "p",
+                ROOK => "r",
+                KNIGHT => "n",
+                BISHOP => "b",
+                QUEEN => "q",
+                KING => "k",
+                _ => " ",
+            };
+            if is_piece_white(piece) {
+                return char.to_uppercase();
+            }
+            return char.to_string();
+        }
+        for n in (0..64).rev() {
+            //start from top right
+            let col = 7 - n % 8;
+            let row = n / 8;
+            let string = piece_string_representation(state.board[row][col]);
+            result = result + &*string;
+            if n % 8 == 0 {
+                result.push('\n');
+            }
+        }
+        return result;
+    }
 }
 
 pub fn new() -> BoardState {
@@ -60,7 +91,6 @@ pub fn new() -> BoardState {
     let pos2 = PositionVector { row: 0, col: 1 };
     let pos3 = PositionVector { row: 1, col: 1 };
     let result = pos1 + pos2;
-    println!("{} {}", result.row, result.col);
     BoardState {
         board: [
             [WHITE + ROOK, WHITE + KNIGHT, WHITE + BISHOP, WHITE + QUEEN, WHITE + KING, WHITE + BISHOP, WHITE + KNIGHT, WHITE + ROOK],
@@ -79,34 +109,7 @@ pub fn new() -> BoardState {
     }
 }
 
-pub fn print_state(state: &BoardState) {
-    fn piece_string_representation(piece: i32) -> String {
-        let colorless_piece = piece & PIECE_MASK;
-        let char = match colorless_piece {
-            PAWN => "p",
-            ROOK => "r",
-            KNIGHT => "n",
-            BISHOP => "b",
-            QUEEN => "q",
-            KING => "k",
-            _ => " ",
-        };
-        if is_piece_white(piece) {
-            return char.to_uppercase();
-        }
-        return char.to_string();
-    }
-    for n in (0..64).rev() {
-        //start from top right
-        let col = 7 - n % 8;
-        let row = n / 8;
-        let string = piece_string_representation(state.board[row][col]);
-        print!("{} ", string);
-        if n % 8 == 0 {
-            println!()
-        }
-    }
-}
+pub fn print_state(state: &BoardState) {}
 
 fn is_piece_white(piece: i32) -> bool {
     let color = piece & COLOR_MASK;
@@ -140,17 +143,33 @@ fn is_move_out_of_bounds(position: PositionVector, relative_move: PositionVector
     return false;
 }
 
-fn is_in_check(state: &BoardState, color: i32) -> [[bool; 8]; 8] {
+pub fn is_in_check(state: &BoardState, color: i32) -> bool {
     let mut squares = [[false; 8]; 8];
-    for row in 0..8 {
+    let mut king_position = INVALID_POSITION;
+    'outer: for row in 0..8 {
         for col in 0..8 {
-            let square = state.get_square(PositionVector { row, col });
-            if is_same_color(square, color) {
-                todo!();
+            let position = PositionVector { row, col };
+            if state.get_square(position) == KING + color {
+                king_position = position;
+                break 'outer;
             }
         }
     }
-    return squares;
+    for row in 0..8 {
+        for col in 0..8 {
+            let position = PositionVector { row, col };
+            let square = state.get_square(position);
+            if !is_same_color(square, color) {
+                for m in get_piece_moves_disregarding_checks(state, position) {
+                    let piece_attack_square = m + position;
+                    if piece_attack_square == king_position {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
 }
 
 pub fn get_piece_moves_disregarding_checks(state: &BoardState, position: PositionVector) -> Vec<PositionVector> {

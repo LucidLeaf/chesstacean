@@ -1,4 +1,4 @@
-use crate::board_state::{get_piece_moves_disregarding_checks, BoardState, PositionVector};
+use crate::board_state::{get_piece_moves_disregarding_checks, is_in_check, BoardState, PositionVector, BLACK, WHITE};
 use std::io;
 use std::time::Instant;
 
@@ -52,6 +52,7 @@ fn main() {
     let bs: BoardState = board_state::new();
     loop {
         board_state::print_state(&bs);
+        println!("white in check: {}\nblack in check: {}", is_in_check(&bs, WHITE), is_in_check(&bs, BLACK));
         let input = read_line("Provide coordinates of piece to move:");
         let coordinates = match notation_to_coordinates(input) {
             Ok(c) => c,
@@ -60,10 +61,7 @@ fn main() {
                 continue;
             }
         };
-        let now = Instant::now();
         let moves = get_piece_moves_disregarding_checks(&bs, coordinates);
-        let elapsed = now.elapsed();
-        println!("calculation took {:.2?}", elapsed);
         if moves.len() == 0 {
             println!("no possible moves");
         }
