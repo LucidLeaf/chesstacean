@@ -17,7 +17,7 @@ const INVALID_POSITION: PositionVector = PositionVector { row: 1234567890, col: 
 const PIECE_MASK: i32 = 7;
 const COLOR_MASK: i32 = 24;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PositionVector {
     pub(crate) row: i32,
     pub(crate) col: i32,
@@ -54,8 +54,7 @@ impl BoardState {
         return self.board[position.row as usize][position.col as usize];
     }
 
-    fn str(state: &BoardState) -> String {
-        let mut result = String::new();
+    pub fn str(&self) -> String {
         fn piece_string_representation(piece: i32) -> String {
             let colorless_piece = piece & PIECE_MASK;
             let char = match colorless_piece {
@@ -72,17 +71,237 @@ impl BoardState {
             }
             return char.to_string();
         }
+        let mut result = String::new();
         for n in (0..64).rev() {
             //start from top right
             let col = 7 - n % 8;
             let row = n / 8;
-            let string = piece_string_representation(state.board[row][col]);
+            let string = piece_string_representation(self.board[row][col]);
             result = result + &*string;
             if n % 8 == 0 {
                 result.push('\n');
             }
         }
         return result;
+    }
+
+    pub fn get_piece_moves_disregarding_checks(&self, position: PositionVector) -> Vec<PositionVector> {
+        let piece = self.get_square(position);
+        let color = piece & COLOR_MASK;
+        let colorless_piece = piece & PIECE_MASK;
+        let moves = match colorless_piece {
+            PAWN => self.get_pawn_moves(position, piece),
+            ROOK => self.get_rook_moves(position, piece),
+            KNIGHT => self.get_knight_moves(position, piece),
+            BISHOP => self.get_bishop_moves(position, piece),
+            QUEEN => self.get_queen_moves(position, piece),
+            KING => self.get_king_moves(position, piece),
+            _ => Vec::new(),
+        };
+        return moves;
+    }
+
+    fn get_pawn_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        let is_on_home_row = || -> bool {
+            let color = piece & COLOR_MASK;
+            let row = if color == WHITE { 1 } else { 6 };
+            return position.row == row;
+        };
+        let move_direction: i32 = if is_piece_white(piece) { 1 } else { -1 };
+        let mut moves = Vec::new();
+        //if no piece is blocking the way, we can move forwards one square
+        let new_move = PositionVector { row: move_direction * 1, col: 0 };
+        if self.get_square(position + new_move) == NOTHING {
+            moves.push(PositionVector { row: move_direction * 1, col: 0 });
+            //if the pawn is on its home row and the square two in front is also free, it can move two squares
+            if is_on_home_row() && self.get_square(PositionVector { row: position.row + move_direction * 2, col: position.col }) == NOTHING {
+                moves.push(PositionVector { row: move_direction * 2, col: 0 });
+            }
+        }
+        //check diagonal squares for taking a piece
+        for i in [-1, 1] {
+            let diagonal_square = PositionVector { row: move_direction * 1, col: i };
+            let row = position.row + diagonal_square.row;
+            let col = position.col + diagonal_square.col;
+            //prevent checks outside of the board
+            if is_move_out_of_bounds(position, diagonal_square) {
+                continue;
+            }
+            let diagonal_square_piece = self.get_square(PositionVector { row, col });
+            if is_opposite_color(piece, diagonal_square_piece) || self.is_en_passant_field(PositionVector { row, col }) {
+                moves.push(diagonal_square);
+            }
+        }
+        return moves;
+    }
+
+    fn get_sliding_moves(&self, position: PositionVector, piece: i32, straight: bool) -> Vec<PositionVector> {
+        let mut moves = Vec::new();
+        for main_direction in [-1, 1] {
+            for second_direction_toggle in [true, false] {
+                let mut length = 1;
+                loop {
+                    let new_move = if straight {
+                        if second_direction_toggle {
+                            PositionVector { row: main_direction * length, col: 0 }
+                        } else {
+                            PositionVector { row: 0, col: main_direction * length }
+                        }
+                    } else {
+                        if second_direction_toggle {
+                            PositionVector { row: main_direction * length, col: length }
+                        } else {
+                            PositionVector { row: main_direction * length, col: -length }
+                        }
+                    };
+                    if is_move_out_of_bounds(position, new_move) {
+                        break;
+                    }
+                    let new_field = self.get_square(position + new_move);
+                    if is_same_color(piece, new_field) {
+                        break;
+                    }
+                    moves.push(new_move);
+                    if is_opposite_color(piece, new_field) {
+                        break;
+                    }
+                    length += 1;
+                }
+            }
+        }
+        return moves;
+    }
+
+    fn get_rook_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        return self.get_sliding_moves(position, piece, true);
+    }
+
+    fn get_knight_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        let mut moves = Vec::new();
+        for long_side in [-2, 2] {
+            for short_side in [-1, 1] {
+                for new_move in [PositionVector { row: long_side, col: short_side }, PositionVector { row: short_side, col: long_side }] {
+                    if is_move_out_of_bounds(position, new_move) {
+                        continue;
+                    }
+                    let other_square = self.get_square(position + new_move);
+                    if is_same_color(piece, other_square) {
+                        continue;
+                    }
+                    moves.push(new_move);
+                }
+            }
+        }
+        return moves;
+    }
+
+    fn get_bishop_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        return self.get_sliding_moves(position, piece, false);
+    }
+
+    fn get_queen_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        let mut moves = self.get_sliding_moves(position, piece, true);
+        moves.extend(self.get_sliding_moves(position, piece, false));
+        return moves;
+    }
+
+    fn get_king_moves(&self, position: PositionVector, piece: i32) -> Vec<PositionVector> {
+        let mut moves = Vec::new();
+        //1 step in all 8 directions
+        for row_step in [-1, 0, 1] {
+            for col_step in [-1, 0, 1] {
+                //this is the square on which the king is standing
+                if row_step == 0 && col_step == 0 {
+                    continue;
+                }
+                let new_move = PositionVector { row: row_step, col: col_step };
+                if is_move_out_of_bounds(position, new_move) {
+                    continue;
+                }
+                let new_square = self.get_square(position + new_move);
+                if is_same_color(piece, new_square) {
+                    continue;
+                }
+                moves.push(new_move);
+            }
+        }
+        //castling
+        if (is_piece_white(piece) && self.white_castling_rights) || (!is_piece_white(piece) && self.black_castling_rights) {
+            //short castle
+            let one_square_left = self.get_square(PositionVector { row: position.row, col: position.col - 1 });
+            let two_squares_left = self.get_square(PositionVector { row: position.row, col: position.col - 2 });
+            if one_square_left == NOTHING && two_squares_left == NOTHING {
+                moves.push(PositionVector { row: 0, col: -2 });
+            }
+            //long castle
+            let one_square_right = self.get_square(PositionVector { row: position.row, col: position.col + 1 });
+            let two_squares_right = self.get_square(PositionVector { row: position.row, col: position.col + 2 });
+            let three_squares_right = self.get_square(PositionVector { row: position.row, col: position.col + 3 });
+            if one_square_right == NOTHING && two_squares_right == NOTHING && three_squares_right == NOTHING {
+                moves.push(PositionVector { row: 0, col: 2 });
+            }
+        }
+        return moves;
+    }
+
+    fn is_en_passant_field(&self, position: PositionVector) -> bool {
+        return self.en_passant == position;
+    }
+
+    pub fn get_piece_moves_respecting_checks(&self, position: PositionVector) -> Vec<PositionVector> {
+        //todo implement castling checks checker
+        todo!();
+        let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
+        let mut moves_respecting_checks = Vec::new();
+        for move_to_check_for_check in moves_disregarding_checks {
+            let new_state = self.perform_move_disregarding_checks();
+            if new_state.is_in_check( WHITE) || new_state.is_in_check( BLACK) {
+                continue;
+            }
+            moves_respecting_checks.push(move_to_check_for_check);
+        }
+        return moves_respecting_checks;
+    }
+
+    pub fn is_in_check(&self, color: i32) -> bool {
+        let mut squares = [[false; 8]; 8];
+        //find the king
+        let mut king_position = INVALID_POSITION;
+        'outer: for row in 0..8 {
+            for col in 0..8 {
+                let position = PositionVector { row, col };
+                if self.get_square(position) == KING + color {
+                    king_position = position;
+                    break 'outer;
+                }
+            }
+        }
+        assert_ne!(king_position, INVALID_POSITION);
+        for row in 0..8 {
+            for col in 0..8 {
+                let position = PositionVector { row, col };
+                let square = self.get_square(position);
+                if !is_same_color(square, color) {
+                    for m in self.get_piece_moves_disregarding_checks(position) {
+                        let piece_attack_square = m + position;
+                        if piece_attack_square == king_position {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    fn perform_move(&self, position: PositionVector, move_to_perform: PositionVector) -> BoardState {
+        if is_move_out_of_bounds(position, move_to_perform) {
+            panic!("move not legal");
+        }
+        let piece = self.get_square(position);
+        let new_position = position + move_to_perform;
+
+        todo!();
     }
 }
 
@@ -109,8 +328,6 @@ pub fn new() -> BoardState {
     }
 }
 
-pub fn print_state(state: &BoardState) {}
-
 fn is_piece_white(piece: i32) -> bool {
     let color = piece & COLOR_MASK;
     if color == WHITE {
@@ -119,9 +336,7 @@ fn is_piece_white(piece: i32) -> bool {
     return false;
 }
 
-fn is_en_passant_field(state: &BoardState, position: PositionVector) -> bool {
-    return state.en_passant == position;
-}
+
 
 fn is_opposite_color(piece_1: i32, piece_2: i32) -> bool {
     let col_1 = piece_1 & COLOR_MASK;
@@ -130,9 +345,12 @@ fn is_opposite_color(piece_1: i32, piece_2: i32) -> bool {
 }
 
 fn is_same_color(piece_1: i32, piece_2: i32) -> bool {
+    if piece_1 == NOTHING || piece_2 == NOTHING {
+        return false;
+    }
     let col_1 = piece_1 & COLOR_MASK;
     let col_2 = piece_2 & COLOR_MASK;
-    return (col_1 == col_2) && (col_1 != NOTHING);
+    return col_1 == col_2;
 }
 
 fn is_move_out_of_bounds(position: PositionVector, relative_move: PositionVector) -> bool {
@@ -143,190 +361,3 @@ fn is_move_out_of_bounds(position: PositionVector, relative_move: PositionVector
     return false;
 }
 
-pub fn is_in_check(state: &BoardState, color: i32) -> bool {
-    let mut squares = [[false; 8]; 8];
-    let mut king_position = INVALID_POSITION;
-    'outer: for row in 0..8 {
-        for col in 0..8 {
-            let position = PositionVector { row, col };
-            if state.get_square(position) == KING + color {
-                king_position = position;
-                break 'outer;
-            }
-        }
-    }
-    for row in 0..8 {
-        for col in 0..8 {
-            let position = PositionVector { row, col };
-            let square = state.get_square(position);
-            if !is_same_color(square, color) {
-                for m in get_piece_moves_disregarding_checks(state, position) {
-                    let piece_attack_square = m + position;
-                    if piece_attack_square == king_position {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
-}
-
-pub fn get_piece_moves_disregarding_checks(state: &BoardState, position: PositionVector) -> Vec<PositionVector> {
-    let piece = state.get_square(position);
-    let color = piece & COLOR_MASK;
-    let colorless_piece = piece & PIECE_MASK;
-    let moves = match colorless_piece {
-        PAWN => get_pawn_moves(state, position, piece),
-        ROOK => get_rook_moves(state, position, piece),
-        KNIGHT => get_knight_moves(state, position, piece),
-        BISHOP => get_bishop_moves(state, position, piece),
-        QUEEN => get_queen_moves(state, position, piece),
-        KING => get_king_moves(state, position, piece),
-        _ => Vec::new(),
-    };
-    return moves;
-}
-
-fn get_pawn_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    let is_on_home_row = || -> bool {
-        let color = piece & COLOR_MASK;
-        let row = if color == WHITE { 1 } else { 6 };
-        return position.row == row;
-    };
-    let move_direction: i32 = if is_piece_white(piece) { 1 } else { -1 };
-    let mut moves = Vec::new();
-    //if no piece is blocking the way, we can move forwards one square
-    let new_move = PositionVector { row: move_direction * 1, col: 0 };
-    if state.get_square(position + new_move) == NOTHING {
-        moves.push(PositionVector { row: move_direction * 1, col: 0 });
-        //if the pawn is on its home row and the square two in front is also free, it can move two squares
-        if is_on_home_row() && state.get_square(PositionVector { row: position.row + move_direction * 2, col: position.col }) == NOTHING {
-            moves.push(PositionVector { row: move_direction * 2, col: 0 });
-        }
-    }
-    //check diagonal squares for taking a piece
-    for i in [-1, 1] {
-        let diagonal_square = PositionVector { row: move_direction * 1, col: i };
-        let row = position.row + diagonal_square.row;
-        let col = position.col + diagonal_square.col;
-        //prevent checks outside of the board
-        if is_move_out_of_bounds(position, diagonal_square) {
-            continue;
-        }
-        let diagonal_square_piece = state.get_square(PositionVector { row, col });
-        if is_opposite_color(piece, diagonal_square_piece) || is_en_passant_field(state, PositionVector { row, col }) {
-            moves.push(diagonal_square);
-        }
-    }
-    return moves;
-}
-
-fn get_sliding_moves(state: &BoardState, position: PositionVector, piece: i32, straight: bool) -> Vec<PositionVector> {
-    let mut moves = Vec::new();
-    for main_direction in [-1, 1] {
-        for second_direction_toggle in [true, false] {
-            let mut length = 1;
-            loop {
-                let new_move = if straight {
-                    if second_direction_toggle {
-                        PositionVector { row: main_direction * length, col: 0 }
-                    } else {
-                        PositionVector { row: 0, col: main_direction * length }
-                    }
-                } else {
-                    if second_direction_toggle {
-                        PositionVector { row: main_direction * length, col: length }
-                    } else {
-                        PositionVector { row: main_direction * length, col: -length }
-                    }
-                };
-                if is_move_out_of_bounds(position, new_move) {
-                    break;
-                }
-                let new_field = state.get_square(position + new_move);
-                if is_same_color(piece, new_field) {
-                    break;
-                }
-                moves.push(new_move);
-                if is_opposite_color(piece, new_field) {
-                    break;
-                }
-                length += 1;
-            }
-        }
-    }
-    return moves;
-}
-
-fn get_rook_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    return get_sliding_moves(state, position, piece, true);
-}
-
-fn get_knight_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    let mut moves = Vec::new();
-    for long_side in [-2, 2] {
-        for short_side in [-1, 1] {
-            for new_move in [PositionVector { row: long_side, col: short_side }, PositionVector { row: short_side, col: long_side }] {
-                if is_move_out_of_bounds(position, new_move) {
-                    continue;
-                }
-                let other_square = state.get_square(position + new_move);
-                if is_same_color(piece, other_square) {
-                    continue;
-                }
-                moves.push(new_move);
-            }
-        }
-    }
-    return moves;
-}
-
-fn get_bishop_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    return get_sliding_moves(state, position, piece, false);
-}
-
-fn get_queen_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    let mut moves = get_sliding_moves(state, position, piece, true);
-    moves.extend(get_sliding_moves(state, position, piece, false));
-    return moves;
-}
-
-fn get_king_moves(state: &BoardState, position: PositionVector, piece: i32) -> Vec<PositionVector> {
-    let mut moves = Vec::new();
-    //1 step in all 8 directions
-    for row_step in [-1, 0, 1] {
-        for col_step in [-1, 0, 1] {
-            //this is the square on which the king is standing
-            if row_step == 0 && col_step == 0 {
-                continue;
-            }
-            let new_move = PositionVector { row: row_step, col: col_step };
-            if is_move_out_of_bounds(position, new_move) {
-                continue;
-            }
-            let new_square = state.get_square(position + new_move);
-            if is_same_color(piece, new_square) {
-                continue;
-            }
-            moves.push(new_move);
-        }
-    }
-    //castling
-    if (is_piece_white(piece) && state.white_castling_rights) || (!is_piece_white(piece) && state.black_castling_rights) {
-        //short castle
-        let one_square_left = state.get_square(PositionVector { row: position.row, col: position.col - 1 });
-        let two_squares_left = state.get_square(PositionVector { row: position.row, col: position.col - 2 });
-        if one_square_left == NOTHING && two_squares_left == NOTHING {
-            moves.push(PositionVector { row: 0, col: -2 });
-        }
-        //long castle
-        let one_square_right = state.get_square(PositionVector { row: position.row, col: position.col + 1 });
-        let two_squares_right = state.get_square(PositionVector { row: position.row, col: position.col + 2 });
-        let three_squares_right = state.get_square(PositionVector { row: position.row, col: position.col + 3 });
-        if one_square_right == NOTHING && two_squares_right == NOTHING && three_squares_right == NOTHING {
-            moves.push(PositionVector { row: 0, col: 2 });
-        }
-    }
-    return moves;
-}

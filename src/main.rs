@@ -1,6 +1,5 @@
-use crate::board_state::{get_piece_moves_disregarding_checks, is_in_check, BoardState, PositionVector, BLACK, WHITE};
+use crate::board_state::{BoardState, PositionVector, BLACK, WHITE};
 use std::io;
-use std::time::Instant;
 
 mod board_state;
 
@@ -51,8 +50,8 @@ fn read_line(prompt: &str) -> String {
 fn main() {
     let bs: BoardState = board_state::new();
     loop {
-        board_state::print_state(&bs);
-        println!("white in check: {}\nblack in check: {}", is_in_check(&bs, WHITE), is_in_check(&bs, BLACK));
+        println!("{}", bs.str());
+        println!("white in check: {}\nblack in check: {}", bs.is_in_check(WHITE), bs.is_in_check(BLACK));
         let input = read_line("Provide coordinates of piece to move:");
         let coordinates = match notation_to_coordinates(input) {
             Ok(c) => c,
@@ -61,15 +60,15 @@ fn main() {
                 continue;
             }
         };
-        let moves = get_piece_moves_disregarding_checks(&bs, coordinates);
+        let moves = bs.get_piece_moves_disregarding_checks(coordinates);
         if moves.len() == 0 {
             println!("no possible moves");
         }
         for i in 0..moves.len() {
-            println!("{0}: {1}", i, coordinates_to_notation(coordinates + moves[i]));
+            println!("[{0}] {1}", i, coordinates_to_notation(coordinates + moves[i]));
         }
-        let move_number: i32 = loop {
-            let number: i32 = read_line("select move").parse().expect("Not a number");
+        let _move_number: i32 = loop {
+            let number: i32 = read_line("select move (0, 1...)").parse().expect("Not a number");
             if number < moves.len() as i32 || number >= 0 {
                 break number;
             }
