@@ -48,10 +48,10 @@ fn read_line(prompt: &str) -> String {
 }
 
 fn main() {
-    let bs: BoardState = board_state::new();
+    let bs: BoardState = BoardState::new();
     loop {
         println!("{}", bs.str());
-        println!("white in check: {}\nblack in check: {}", bs.is_in_check(WHITE), bs.is_in_check(BLACK));
+        println!("white in check: {}\nblack in check: {}", bs.is_color_in_check(WHITE), bs.is_color_in_check(BLACK));
         let input = read_line("Provide coordinates of piece to move:");
         let coordinates = match notation_to_coordinates(input) {
             Ok(c) => c,
@@ -60,7 +60,7 @@ fn main() {
                 continue;
             }
         };
-        let moves = bs.get_piece_moves_disregarding_checks(coordinates);
+        let moves = bs.get_piece_moves_respecting_checks(coordinates);
         if moves.len() == 0 {
             println!("no possible moves");
         }
