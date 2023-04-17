@@ -40,8 +40,10 @@ pub struct BoardState {
     board: [[i32; 8]; 8],
     color_to_move: i32,
     en_passant: PositionVector,
-    white_castling_rights: bool,
-    black_castling_rights: bool,
+    white_short_castling_rights: bool,
+    white_long_castling_rights: bool,
+    black_short_castling_rights: bool,
+    black_long_castling_rights: bool,
 }
 
 impl BoardState {
@@ -59,8 +61,10 @@ impl BoardState {
             ],
             color_to_move: WHITE,
             en_passant: INVALID_POSITION,
-            white_castling_rights: true,
-            black_castling_rights: true,
+            white_short_castling_rights: true,
+            white_long_castling_rights: true,
+            black_short_castling_rights: true,
+            black_long_castling_rights: true,
         }
     }
 
@@ -112,15 +116,16 @@ impl BoardState {
             board: new_board,
             color_to_move: self.color_to_move,
             en_passant: self.en_passant,
-            white_castling_rights: self.white_castling_rights,
-            black_castling_rights: self.black_castling_rights,
+            white_short_castling_rights: self.white_short_castling_rights,
+            white_long_castling_rights: self.white_long_castling_rights,
+            black_short_castling_rights: self.black_short_castling_rights,
+            black_long_castling_rights: self.black_long_castling_rights,
         };
         return new_state;
     }
 
     fn get_piece_moves_disregarding_checks(&self, position: PositionVector) -> Vec<PositionVector> {
         let piece = self.get_piece_at_position(position);
-        let color = piece & COLOR_MASK;
         let colorless_piece = piece & PIECE_MASK;
         let moves = match colorless_piece {
             PAWN => self.get_pawn_moves(position, piece),
@@ -259,15 +264,16 @@ impl BoardState {
                 moves.push(new_move);
             }
         }
-        //castling
-        if (is_piece_white(piece) && self.white_castling_rights) || (!is_piece_white(piece) && self.black_castling_rights) {
-            //short castle
-            let one_square_left = self.get_piece_at_position(PositionVector { row: position.row, col: position.col - 1 });
-            let two_squares_left = self.get_piece_at_position(PositionVector { row: position.row, col: position.col - 2 });
-            if one_square_left == NOTHING && two_squares_left == NOTHING {
+        //short castle
+        if (is_piece_white(piece) && self.white_short_castling_rights) || (!is_piece_white(piece) && self.black_short_castling_rights) {
+            let first_square = self.get_piece_at_position(PositionVector { row: position.row, col: position.col - 1 });
+            let second_square = self.get_piece_at_position(PositionVector { row: position.row, col: position.col - 2 });
+            if first_square == NOTHING && second_square == NOTHING {
                 moves.push(PositionVector { row: 0, col: -2 });
             }
-            //long castle
+        }
+        //long castle
+        if (is_piece_white(piece) && self.white_long_castling_rights) || (!is_piece_white(piece) && self.black_long_castling_rights){
             let one_square_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 1 });
             let two_squares_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 2 });
             let three_squares_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 3 });
@@ -283,17 +289,20 @@ impl BoardState {
     }
 
     pub fn get_piece_moves_respecting_checks(&self, position: PositionVector) -> Vec<PositionVector> {
+        let piece = self.get_piece_at_position(position);
+
         let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
         let mut moves_respecting_checks = Vec::new();
         for move_to_check_for_check in moves_disregarding_checks {
+            if piece & PIECE_MASK == KING {
+                //todo implement castling checks checker
+            }
             let new_state = self.perform_move(position, move_to_check_for_check);
-            //todo implement castling checks checker
             if new_state.is_color_in_check(WHITE) || new_state.is_color_in_check(BLACK) {
                 continue;
             }
             moves_respecting_checks.push(move_to_check_for_check);
         }
-        todo!();
         return moves_respecting_checks;
     }
 
@@ -328,13 +337,15 @@ impl BoardState {
     }
 
     fn perform_move(&self, position: PositionVector, move_to_perform: PositionVector) -> BoardState {
+        //todo incomplete checks
         if is_move_out_of_bounds(position, move_to_perform) {
             panic!("move not legal");
         }
         let piece = self.get_piece_at_position(position);
         let new_position = position + move_to_perform;
-
-        todo!();
+        let piece_copied_state = self.set_piece_at_position(new_position, piece);
+        let piece_moved_state = piece_copied_state.set_piece_at_position(position, NOTHING);
+        return piece_moved_state;
     }
 }
 
