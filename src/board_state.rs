@@ -273,7 +273,7 @@ impl BoardState {
             }
         }
         //long castle
-        if (is_piece_white(piece) && self.white_long_castling_rights) || (!is_piece_white(piece) && self.black_long_castling_rights){
+        if (is_piece_white(piece) && self.white_long_castling_rights) || (!is_piece_white(piece) && self.black_long_castling_rights) {
             let one_square_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 1 });
             let two_squares_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 2 });
             let three_squares_right = self.get_piece_at_position(PositionVector { row: position.row, col: position.col + 3 });
@@ -290,7 +290,10 @@ impl BoardState {
 
     pub fn get_piece_moves_respecting_checks(&self, position: PositionVector) -> Vec<PositionVector> {
         let piece = self.get_piece_at_position(position);
-
+        //player turn
+        if piece & COLOR_MASK != self.color_to_move {
+            return Vec::new();
+        }
         let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
         let mut moves_respecting_checks = Vec::new();
         for move_to_check_for_check in moves_disregarding_checks {
@@ -306,6 +309,24 @@ impl BoardState {
         return moves_respecting_checks;
     }
 
+    fn is_position_in_check_by_color(&self, position_to_be_checked: PositionVector, color: i32) -> bool {
+        for row in 0..8 {
+            for col in 0..8 {
+                let iterator_position = PositionVector { row, col };
+                let square = self.get_piece_at_position(iterator_position);
+                if !is_same_color(square, color) {
+                    for m in self.get_piece_moves_disregarding_checks(iterator_position) {
+                        let piece_attack_square = m + iterator_position;
+                        if piece_attack_square == position_to_be_checked {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     pub fn is_color_in_check(&self, color: i32) -> bool {
         //find the king
         let mut king_position = INVALID_POSITION;
@@ -319,32 +340,19 @@ impl BoardState {
             }
         }
         assert_ne!(king_position, INVALID_POSITION);
-        for row in 0..8 {
-            for col in 0..8 {
-                let position = PositionVector { row, col };
-                let square = self.get_piece_at_position(position);
-                if !is_same_color(square, color) {
-                    for m in self.get_piece_moves_disregarding_checks(position) {
-                        let piece_attack_square = m + position;
-                        if piece_attack_square == king_position {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return false;
+        return self.is_position_in_check_by_color(king_position, color);
     }
 
-    fn perform_move(&self, position: PositionVector, move_to_perform: PositionVector) -> BoardState {
-        //todo incomplete checks
+    pub fn perform_move(&self, position: PositionVector, move_to_perform: PositionVector) -> BoardState {
         if is_move_out_of_bounds(position, move_to_perform) {
-            panic!("move not legal");
+            panic!("move out of bounds");
         }
         let piece = self.get_piece_at_position(position);
         let new_position = position + move_to_perform;
-        let piece_copied_state = self.set_piece_at_position(new_position, piece);
-        let piece_moved_state = piece_copied_state.set_piece_at_position(position, NOTHING);
+        let mut piece_moved_state = self.set_piece_at_position(new_position, piece).set_piece_at_position(position, NOTHING);
+        //todo change castling rights
+        
+        piece_moved_state.color_to_move = if piece_moved_state.color_to_move == WHITE { BLACK } else { WHITE };
         return piece_moved_state;
     }
 }

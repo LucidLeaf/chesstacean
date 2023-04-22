@@ -48,7 +48,7 @@ fn read_line(prompt: &str) -> String {
 }
 
 fn main() {
-    let bs: BoardState = BoardState::new();
+    let mut bs: BoardState = BoardState::new();
     loop {
         println!("{}", bs.str());
         println!("white in check: {}\nblack in check: {}", bs.is_color_in_check(WHITE), bs.is_color_in_check(BLACK));
@@ -63,16 +63,18 @@ fn main() {
         let moves = bs.get_piece_moves_respecting_checks(coordinates);
         if moves.len() == 0 {
             println!("no possible moves");
+            continue;
         }
         for i in 0..moves.len() {
             println!("[{0}] {1}", i, coordinates_to_notation(coordinates + moves[i]));
         }
-        let _move_number: i32 = loop {
-            let number: i32 = read_line("select move (0, 1...)").parse().expect("Not a number");
-            if number < moves.len() as i32 || number >= 0 {
+        let move_number: usize = loop {
+            let number: usize = read_line("select move (0, 1...)").parse().expect("Not a number");
+            if number < moves.len() {
                 break number;
             }
             println!("Invalid number");
         };
+        bs = bs.perform_move(coordinates, moves[move_number]);
     }
 }
