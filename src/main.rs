@@ -12,12 +12,6 @@ fn notation_to_coordinates(input: String) -> Result<Position, &'static str> {
     let formatted_input = input.to_lowercase();
     let column_string = formatted_input.get(0..1).expect("Error converting column");
     let row_string = formatted_input.get(1..2).expect("Error converting row");
-    if !["a", "b", "c", "d", "e", "f", "g", "h"].contains(&column_string) {
-        return Err("Invalid column");
-    }
-    if !["1", "2", "3", "4", "5", "6", "7", "8"].contains(&row_string) {
-        return Err("Invalid row");
-    }
     let col = match column_string {
         "a" => 1,
         "b" => 2,
@@ -56,7 +50,9 @@ fn game_loop() {
     let mut bs: BoardState = BoardState::new();
     loop {
         println!("{}", bs.str());
-        println!("white in check: {}\nblack in check: {}", bs.is_color_in_check(board_state::WHITE), bs.is_color_in_check(board_state::BLACK));
+        println!("white in check: {}", bs.is_color_in_check(board_state::WHITE));
+        println!("black in check: {}", bs.is_color_in_check(board_state::BLACK));
+        println!("en-passant square: {}", coordinates_to_notation(bs.get_en_passant_square()));
         let input = read_line("Provide coordinates of piece:");
         let original_square = match notation_to_coordinates(input) {
             Ok(c) => c,
@@ -80,11 +76,15 @@ fn game_loop() {
         }
         let square_to_move_to: Position = loop {
             let written_move: String = read_line("select move:");
-            let position = notation_to_coordinates(written_move);
-            if position.is_err() {
+            let position_option = notation_to_coordinates(written_move);
+            if position_option.is_err() {
                 println!("Not a move from above");
             } else {
-                break position.unwrap();
+                let position = position_option.unwrap();
+                let relative_position = position - original_square;
+                if moves.contains(&relative_position) {
+                    break position;
+                }
             }
         };
         let relative_move = Position::absolute_to_relative(original_square, square_to_move_to);
