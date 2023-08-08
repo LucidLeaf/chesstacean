@@ -29,6 +29,14 @@ impl Add for Position {
     }
 }
 
+impl Sub for Position {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        Self { row: self.row - other.row, col: self.col - other.col }
+    }
+}
+
 impl PartialEq<Self> for Position {
     fn eq(&self, other: &Self) -> bool {
         self.col == other.col && self.row == other.row
