@@ -187,8 +187,8 @@ impl BoardState {
 
     /// returns piece integer at the given position, position must be in bounds
     fn get_piece_at_position(&self, position: Position) -> i32 {
-        if position.row < 0 || position.col < 0 {
-            panic!("Negative Indices getting piece at position {},{}", position.row, position.col);
+        if position.row < 0 || position.col < 0 || position.row > 7 || position.col > 7 {
+            panic!("Indices out of bounds getting piece at position {},{}", position.row, position.col);
         }
         return self.board[position.row as usize][position.col as usize];
     }
@@ -215,18 +215,22 @@ impl BoardState {
         let piece = self.get_piece_at_position(position);
         let colorless_piece = piece & PIECE_MASK;
         let moves = match colorless_piece {
-            PAWN => self.get_pawn_moves(position, piece),
-            ROOK => self.get_rook_moves(position, piece),
-            KNIGHT => self.get_knight_moves(position, piece),
-            BISHOP => self.get_bishop_moves(position, piece),
-            QUEEN => self.get_queen_moves(position, piece),
-            KING => self.get_king_moves(position, piece),
+            PAWN => self.get_pawn_moves(position),
+            ROOK => self.get_rook_moves(position),
+            KNIGHT => self.get_knight_moves(position),
+            BISHOP => self.get_bishop_moves(position),
+            QUEEN => self.get_queen_moves(position),
+            KING => self.get_king_moves(position),
             _ => Vec::new(),
         };
         return moves;
     }
 
-    fn get_pawn_moves(&self, position: Position, piece: i32) -> Vec<Position> {
+    fn get_pawn_moves(&self, position: Position) -> Vec<Position> {
+        let piece = self.get_piece_at_position(position);
+        let is_en_passant_field = |pos: Position| -> bool {
+            return self.en_passant == pos;
+        };
         let is_on_home_row = || -> bool {
             let color = piece & COLOR_MASK;
             let row = if color == WHITE { 1 } else { 6 };
@@ -253,30 +257,32 @@ impl BoardState {
                 continue;
             }
             let diagonal_square_piece = self.get_piece_at_position(Position { row, col });
-            if is_opposite_color(piece, diagonal_square_piece) || self.is_en_passant_field(Position { row, col }) {
+            if is_opposite_color(piece, diagonal_square_piece) || is_en_passant_field(Position { row, col }) {
                 moves.push(diagonal_square);
             }
         }
         return moves;
     }
 
-    fn get_sliding_moves(&self, position: Position, piece: i32, straight: bool) -> Vec<Position> {
+    fn get_sliding_moves(&self, position: Position, diagonal: bool) -> Vec<Position> {
+        //todo this could definitely use some refactoring
+        let piece = self.get_piece_at_position(position);
         let mut moves = Vec::new();
         for main_direction in [-1, 1] {
             for second_direction_toggle in [true, false] {
                 let mut length = 1;
                 loop {
-                    let new_move = if straight {
-                        if second_direction_toggle {
-                            Position { row: main_direction * length, col: 0 }
-                        } else {
-                            Position { row: 0, col: main_direction * length }
-                        }
-                    } else {
+                    let new_move = if !diagonal {
                         if second_direction_toggle {
                             Position { row: main_direction * length, col: length }
                         } else {
                             Position { row: main_direction * length, col: -length }
+                        }
+                    } else {
+                        if second_direction_toggle {
+                            Position { row: main_direction * length, col: 0 }
+                        } else {
+                            Position { row: 0, col: main_direction * length }
                         }
                     };
                     if is_move_out_of_bounds(position, new_move) {
@@ -297,11 +303,12 @@ impl BoardState {
         return moves;
     }
 
-    fn get_rook_moves(&self, position: Position, piece: i32) -> Vec<Position> {
-        return self.get_sliding_moves(position, piece, true);
+    fn get_rook_moves(&self, position: Position) -> Vec<Position> {
+        return self.get_sliding_moves(position, true);
     }
 
-    fn get_knight_moves(&self, position: Position, piece: i32) -> Vec<Position> {
+    fn get_knight_moves(&self, position: Position) -> Vec<Position> {
+        let piece = self.get_piece_at_position(position);
         let mut moves = Vec::new();
         for long_side in [-2, 2] {
             for short_side in [-1, 1] {
@@ -320,17 +327,18 @@ impl BoardState {
         return moves;
     }
 
-    fn get_bishop_moves(&self, position: Position, piece: i32) -> Vec<Position> {
-        return self.get_sliding_moves(position, piece, false);
+    fn get_bishop_moves(&self, position: Position) -> Vec<Position> {
+        return self.get_sliding_moves(position, false);
     }
 
-    fn get_queen_moves(&self, position: Position, piece: i32) -> Vec<Position> {
-        let mut moves = self.get_sliding_moves(position, piece, true);
-        moves.extend(self.get_sliding_moves(position, piece, false));
+    fn get_queen_moves(&self, position: Position) -> Vec<Position> {
+        let mut moves = self.get_sliding_moves(position, true);
+        moves.extend(self.get_sliding_moves(position, false));
         return moves;
     }
 
-    fn get_king_moves(&self, position: Position, piece: i32) -> Vec<Position> {
+    fn get_king_moves(&self, position: Position) -> Vec<Position> {
+        let king = self.get_piece_at_position(position);
         let mut moves = Vec::new();
         //1 step in all 8 directions
         for row_step in [-1, 0, 1] {
@@ -344,14 +352,14 @@ impl BoardState {
                     continue;
                 }
                 let new_square = self.get_piece_at_position(position + new_move);
-                if is_same_color(piece, new_square) {
+                if is_same_color(king, new_square) {
                     continue;
                 }
                 moves.push(new_move);
             }
         }
         //short castle
-        if (is_piece_white(piece) && self.white_short_castling_rights) || (!is_piece_white(piece) && self.black_short_castling_rights) {
+        if (is_piece_white(king) && self.white_short_castling_rights) || (!is_piece_white(king) && self.black_short_castling_rights) {
             let first_square = self.get_piece_at_position(Position { row: position.row, col: position.col - 1 });
             let second_square = self.get_piece_at_position(Position { row: position.row, col: position.col - 2 });
             if first_square == NOTHING && second_square == NOTHING {
@@ -359,7 +367,7 @@ impl BoardState {
             }
         }
         //long castle
-        if (is_piece_white(piece) && self.white_long_castling_rights) || (!is_piece_white(piece) && self.black_long_castling_rights) {
+        if (is_piece_white(king) && self.white_long_castling_rights) || (!is_piece_white(king) && self.black_long_castling_rights) {
             let one_square_right = self.get_piece_at_position(Position { row: position.row, col: position.col + 1 });
             let two_squares_right = self.get_piece_at_position(Position { row: position.row, col: position.col + 2 });
             let three_squares_right = self.get_piece_at_position(Position { row: position.row, col: position.col + 3 });
