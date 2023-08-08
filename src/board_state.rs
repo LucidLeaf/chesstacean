@@ -1,4 +1,4 @@
-use std::ops::Add;
+use std::ops::{Add, Sub};
 
 const NOTHING: i32 = 0;
 const PAWN: i32 = 1;
