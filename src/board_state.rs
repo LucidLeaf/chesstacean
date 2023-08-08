@@ -113,6 +113,79 @@ impl BoardState {
         return result;
     }
 
+    pub fn get_en_passant_square(&self) -> Position {
+        return self.en_passant;
+    }
+
+    pub fn is_color_in_check(&self, color: i32) -> bool {
+        //find the king
+        let mut king_position = INVALID_POSITION;
+        'outer: for row in 0..8 {
+            for col in 0..8 {
+                let position = Position { row, col };
+                if self.get_piece_at_position(position) == KING + color {
+                    king_position = position;
+                    break 'outer;
+                }
+            }
+        }
+        assert_ne!(king_position, INVALID_POSITION);
+        return self.is_position_attacked(king_position);
+    }
+
+    pub fn get_legal_moves(&self) {
+        todo!();
+    }
+
+    pub fn get_piece_moves_respecting_checks(&self, position: Position) -> Vec<Position> {
+        let piece = self.get_piece_at_position(position);
+        //player turn
+        if piece & COLOR_MASK != self.color_to_move {
+            return Vec::new();
+        }
+        let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
+        let mut moves_respecting_checks = Vec::new();
+        for move_to_check_for_check in moves_disregarding_checks {
+            if piece & PIECE_MASK == KING {
+                //todo implement castling checks checker
+            }
+            let new_state = self.perform_move(position, move_to_check_for_check);
+            if new_state.is_color_in_check(WHITE) || new_state.is_color_in_check(BLACK) {
+                continue;
+            }
+            moves_respecting_checks.push(move_to_check_for_check);
+        }
+        return moves_respecting_checks;
+    }
+
+    /**
+    relative move to perform from position
+     */
+    pub fn perform_move(&self, position: Position, relative_position: Position) -> BoardState {
+        if is_move_out_of_bounds(position, relative_position) {
+            panic!("move out of bounds");
+        }
+        let piece = self.get_piece_at_position(position);
+        let new_position = position + relative_position;
+        let mut piece_moved_state = self.set_piece_at_position(new_position, piece).set_piece_at_position(position, NOTHING);
+        //todo remove en-passanted pawn
+        if new_position == self.en_passant {
+            let enemy_pawn_position = Position { row: position.row, col: new_position.col };
+            piece_moved_state = piece_moved_state.set_piece_at_position(enemy_pawn_position, NOTHING);
+        }
+        //todo castle both king and rook
+        //todo change castling rights
+        if piece & PAWN > 0 && relative_position.row.abs() == 2 {
+            let en_passant_position = Position { row: position.row + (relative_position.row / 2), col: position.col };
+            piece_moved_state.en_passant = en_passant_position;
+        } else {
+            piece_moved_state.en_passant = INVALID_POSITION;
+        }
+        piece_moved_state.color_to_move = if piece_moved_state.color_to_move == WHITE { BLACK } else { WHITE };
+        return piece_moved_state;
+    }
+
+    /// returns piece integer at the given position, position must be in bounds
     fn get_piece_at_position(&self, position: Position) -> i32 {
         if position.row < 0 || position.col < 0 {
             panic!("Negative Indices getting piece at position {},{}", position.row, position.col);
@@ -297,32 +370,8 @@ impl BoardState {
         return moves;
     }
 
-    fn is_en_passant_field(&self, position: Position) -> bool {
-        return self.en_passant == position;
-    }
-
-    pub fn get_piece_moves_respecting_checks(&self, position: Position) -> Vec<Position> {
-        let piece = self.get_piece_at_position(position);
-        //player turn
-        if piece & COLOR_MASK != self.color_to_move {
-            return Vec::new();
-        }
-        let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
-        let mut moves_respecting_checks = Vec::new();
-        for move_to_check_for_check in moves_disregarding_checks {
-            if piece & PIECE_MASK == KING {
-                //todo implement castling checks checker
-            }
-            let new_state = self.perform_move(position, move_to_check_for_check);
-            if new_state.is_color_in_check(WHITE) || new_state.is_color_in_check(BLACK) {
-                continue;
-            }
-            moves_respecting_checks.push(move_to_check_for_check);
-        }
-        return moves_respecting_checks;
-    }
-
-    fn is_position_in_check_by_color(&self, position_to_be_checked: Position, color: i32) -> bool {
+    fn is_position_attacked(&self, position_to_be_checked: Position) -> bool {
+        let color = COLOR_MASK & self.get_piece_at_position(position_to_be_checked);
         for row in 0..8 {
             for col in 0..8 {
                 let iterator_position = Position { row, col };
@@ -338,42 +387,6 @@ impl BoardState {
             }
         }
         return false;
-    }
-
-    pub fn is_color_in_check(&self, color: i32) -> bool {
-        //find the king
-        let mut king_position = INVALID_POSITION;
-        'outer: for row in 0..8 {
-            for col in 0..8 {
-                let position = Position { row, col };
-                if self.get_piece_at_position(position) == KING + color {
-                    king_position = position;
-                    break 'outer;
-                }
-            }
-        }
-        assert_ne!(king_position, INVALID_POSITION);
-        return self.is_position_in_check_by_color(king_position, color);
-    }
-
-    /**
-    relative move to perform from position
-     */
-    pub fn perform_move(&self, position: Position, relative_position: Position) -> BoardState {
-        if is_move_out_of_bounds(position, relative_position) {
-            panic!("move out of bounds");
-        }
-        let piece = self.get_piece_at_position(position);
-        let new_position = position + relative_position;
-        let mut piece_moved_state = self.set_piece_at_position(new_position, piece).set_piece_at_position(position, NOTHING);
-        //todo change castling rights
-
-        piece_moved_state.color_to_move = if piece_moved_state.color_to_move == WHITE { BLACK } else { WHITE };
-        return piece_moved_state;
-    }
-
-    fn get_legal_moves(&self) {
-        todo!();
     }
 }
 
