@@ -28,6 +28,9 @@ fn notation_to_coordinates(input: String) -> Result<Position, &'static str> {
 }
 
 fn coordinates_to_notation(input: Position) -> String {
+    if input == board_state::INVALID_POSITION {
+        return String::from("");
+    }
     let row = char::from_digit((input.row + 1) as u32, 10).expect("Invalid coordinate");
     let col: char = char::from(97u8 + input.col as u8);
     let mut result = col.to_string();
