@@ -11,7 +11,7 @@ const KING: i32 = 6;
 pub const WHITE: i32 = 8;
 pub const BLACK: i32 = 16;
 
-const INVALID_POSITION: Position = Position { row: 1234567890, col: 1234567890 };
+pub(crate) const INVALID_POSITION: Position = Position { row: 1234567890, col: 1234567890 };
 const PIECE_MASK: i32 = 7;
 const COLOR_MASK: i32 = 24;
 
