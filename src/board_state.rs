@@ -47,6 +47,17 @@ impl Position {
         let row: i32 = (row_string.to_digit(10).expect("Not a number") - 1) as i32;
         return Position { row, col };
     }
+
+    pub fn str(&self) -> String {
+        if self == &INVALID_POSITION {
+            return String::from("");
+        }
+        let row = char::from_digit((self.row + 1) as u32, 10).expect("Invalid position");
+        let col: char = char::from(97u8 + self.col as u8);
+        let mut result = col.to_string();
+        result.push(row);
+        return result;
+    }
 }
 
 impl PartialEq<Self> for Position {
@@ -135,7 +146,7 @@ impl BoardState {
         let castling_notice = format!("\t\tCastling rights: {}\n", self.castling_rights);
         strings_to_insert.push(&castling_notice);
         // en_passant_square
-        let en_passant_notice = format!("\t\tEn-passant-square: {}\n", coordinates_to_notation(self.en_passant_square));
+        let en_passant_notice = format!("\t\tEn-passant-square: {}\n", self.en_passant_square.str());
         strings_to_insert.push(&en_passant_notice);
         // half move clock
         let half_move_notice = format!("\t\tHalf move clock: {}\n", self.half_move_clock);
@@ -206,7 +217,7 @@ impl BoardState {
     }
 
     /**
-    move to perform from first position to second position
+    move piece to new position, allows illegal moves
      */
     pub fn perform_move(&self, position: Position, new_position: Position) -> BoardState {
         let piece = self.get_piece_at_position(position);
@@ -218,14 +229,36 @@ impl BoardState {
             };
             new_state = new_state.set_piece_at_position(enemy_pawn_position, NOTHING);
         }
-
         // increment move counter after blacks turn
         if self.color_to_move == BLACK {
-            new_state.full_move_clock = new_state.full_move_clock + 1
+            new_state.full_move_clock = self.full_move_clock + 1
         }
         //todo change half move counter
-        //todo castle both king and rook
-        //todo change castling rights
+        if piece & PIECE_MASK == KING {
+            //todo castle both king and rook
+
+            // remove further castling rights
+            let castling_chars = if self.color_to_move == WHITE { ["K", "Q"] } else { ["k", "q"] };
+            for char in castling_chars {
+                new_state.castling_rights = self.castling_rights.replace(char, "");
+            }
+        }
+        //remove castling rights for respective side
+        if piece & PIECE_MASK == ROOK {
+            if position.row == 0 && position.col == 0 {
+                new_state.castling_rights = self.castling_rights.replace("Q", "");
+            }
+            if position.row == 0 && position.col == 7 {
+                new_state.castling_rights = self.castling_rights.replace("K", "");
+            }
+            if position.row == 7 && position.col == 0 {
+                new_state.castling_rights = self.castling_rights.replace("q", "");
+            }
+            if position.row == 7 && position.col == 7 {
+                new_state.castling_rights = new_state.castling_rights.replace("k", "");
+            }
+        }
+        // set en-passant square
         if piece & PAWN > 0 && (position.row - new_position.row).abs() == 2 {
             let en_passant_position = Position {
                 row: (position.row + new_position.row) / 2,
@@ -235,7 +268,8 @@ impl BoardState {
         } else {
             new_state.en_passant_square = INVALID_POSITION;
         }
-        new_state.color_to_move = if new_state.color_to_move == WHITE { BLACK } else { WHITE };
+        //change turn
+        new_state.color_to_move = if self.color_to_move == WHITE { BLACK } else { WHITE };
         return new_state;
     }
 
@@ -561,15 +595,4 @@ fn is_position_out_of_bounds(position: Position) -> bool {
 
 fn is_index_out_of_bounds(index: i32) -> bool {
     return index < 0 || index > 63;
-}
-
-pub fn coordinates_to_notation(input: Position) -> String {
-    if input == INVALID_POSITION {
-        return String::from("");
-    }
-    let row = char::from_digit((input.row + 1) as u32, 10).expect("Invalid coordinate");
-    let col: char = char::from(97u8 + input.col as u8);
-    let mut result = col.to_string();
-    result.push(row);
-    return result;
 }

@@ -40,7 +40,7 @@ fn game_loop() {
             continue;
         }
         for i in 0..moves.len() {
-            print!("{}", board_state::coordinates_to_notation(moves[i]));
+            print!("{}", moves[i].str());
             if i < moves.len() - 1 {
                 print!(" ,");
             } else {
