@@ -304,22 +304,25 @@ impl BoardState {
     }
 
     fn get_sliding_moves(&self, position: Position, diagonal: bool) -> Vec<Position> {
-        let piece = self.get_piece_at_position(position);
-        let mut moves = Vec::new();
+        let piece: i32 = self.get_piece_at_position(position);
+        let mut moves: Vec<Position> = Vec::new();
         let current_position_index: i32 = Position::index_from_position(position) as i32;
+        //array directions lead to more readable code (as of my abilities)
         let directions: [i32; 4] = if diagonal { [7, 9, -9, -7] } else { [1, 8, -1, -8] };
         for direction in directions {
+            let mut previous_position_checked = position;
             let mut length = 1;
             loop {
                 let new_index: i32 = current_position_index + direction * length;
                 if is_index_out_of_bounds(new_index) {
                     break;
                 }
-                let new_position = Position::position_from_indices(new_index as usize);
-                if new_position.row == 8 {
-                    panic!("We shouldn't be here");
+                let new_position: Position = Position::position_from_indices(new_index as usize);
+                //check whether the move ran over border
+                if (new_position.row - previous_position_checked.row).abs() > 1 || (new_position.col - previous_position_checked.col).abs() > 1 {
+                    break;
                 }
-                let piece_at_new_position = self.get_piece_at_position(new_position);
+                let piece_at_new_position: i32 = self.get_piece_at_position(new_position);
                 if is_same_color(piece, piece_at_new_position) {
                     break;
                 }
@@ -328,6 +331,7 @@ impl BoardState {
                     break;
                 }
                 length = length + 1;
+                previous_position_checked = new_position;
             }
         }
         return moves;
@@ -430,27 +434,16 @@ fn fen_to_board(board_string: &&str) -> [i32; 64] {
     return final_board;
 }
 
-pub(crate) fn notation_to_coordinates(input: &str) -> Position {
+pub fn notation_to_coordinates(input: &str) -> Position {
     if input.len() != 2 {
         return INVALID_POSITION;
     }
-    let formatted_input = input.to_lowercase();
-    let column_string = formatted_input.get(0..1).expect("Error converting column");
-    let row_string = formatted_input.get(1..2).expect("Error converting row");
-    //todo reformat below
-    let col = match column_string {
-        "a" => 1,
-        "b" => 2,
-        "c" => 3,
-        "d" => 4,
-        "e" => 5,
-        "f" => 6,
-        "g" => 7,
-        "h" => 8,
-        _ => 0,
-    };
-    let row: i32 = row_string.parse().expect("Not a number");
-    return Position { row: row - 1, col: col - 1 };
+    let mut formatted_input = input.to_lowercase();
+    let column_string = formatted_input.remove(0);
+    let row_string = formatted_input.remove(0);
+    let col: i32 = (column_string.to_digit(20).expect("Not a row") - 10) as i32;
+    let row: i32 = (row_string.to_digit(10).expect("Not a number") - 1) as i32;
+    return Position { row, col };
 }
 
 fn is_piece_white(piece: i32) -> bool {
