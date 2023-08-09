@@ -33,10 +33,7 @@ impl Position {
     pub fn position_from_indices(index: usize) -> Position {
         let col = (index % 8) as i32;
         let row = ((index - index % 8) / 8) as i32;
-        return Position {
-            row,
-            col,
-        };
+        return Position { row, col };
     }
 
     pub fn position_from_string(input: &str) -> Position {
@@ -48,10 +45,7 @@ impl Position {
         let row_string = formatted_input.remove(0);
         let col: i32 = (column_string.to_digit(20).expect("Not a row") - 10) as i32;
         let row: i32 = (row_string.to_digit(10).expect("Not a number") - 1) as i32;
-        return Position {
-            row,
-            col,
-        };
+        return Position { row, col };
     }
 }
 
@@ -79,11 +73,7 @@ impl BoardState {
             string_array[i] = split_string.get(i).expect("FEN invalid");
         }
         let board = fen_to_board(&string_array[0]);
-        let color_to_move = if string_array[1] == "w" {
-            WHITE
-        } else {
-            BLACK
-        };
+        let color_to_move = if string_array[1] == "w" { WHITE } else { BLACK };
         let castling_rights = String::from(string_array[2]);
         let en_passant_square = Position::position_from_string(string_array[3]);
         let half_move_clock: u32 = string_array[4].parse().expect("Not a valid clock");
@@ -124,10 +114,7 @@ impl BoardState {
             // start from top left
             let col = 7 - n % 8;
             let row = n / 8;
-            let piece_string = char_from_piece(self.get_piece_at_position(Position {
-                row,
-                col,
-            }));
+            let piece_string = char_from_piece(self.get_piece_at_position(Position { row, col }));
             result.push(piece_string);
             if n % 8 == 0 && n != 63 && n != 0 {
                 result.push('\n');
@@ -141,11 +128,7 @@ impl BoardState {
     pub fn full_state_str(&self) -> String {
         let mut strings_to_insert: Vec<&str> = Vec::new();
         // color to move
-        let color_string: &str = if self.color_to_move == WHITE {
-            "white"
-        } else {
-            "black"
-        };
+        let color_string: &str = if self.color_to_move == WHITE { "white" } else { "black" };
         let color_notice = format!("\t\tTo move: {}\n", color_string);
         strings_to_insert.push(color_notice.as_str());
         // castling rights
@@ -252,11 +235,7 @@ impl BoardState {
         } else {
             new_state.en_passant_square = INVALID_POSITION;
         }
-        new_state.color_to_move = if new_state.color_to_move == WHITE {
-            BLACK
-        } else {
-            WHITE
-        };
+        new_state.color_to_move = if new_state.color_to_move == WHITE { BLACK } else { WHITE };
         return new_state;
     }
 
@@ -303,10 +282,7 @@ impl BoardState {
         let color = COLOR_MASK & self.get_piece_at_position(position_to_be_checked);
         for row in 0..8 {
             for col in 0..8 {
-                let iterator_position = Position {
-                    row,
-                    col,
-                };
+                let iterator_position = Position { row, col };
                 let square = self.get_piece_at_position(iterator_position);
                 if is_same_color(square, color) {
                     continue;
@@ -343,18 +319,10 @@ impl BoardState {
         };
         let is_on_home_row = || -> bool {
             let color = piece & COLOR_MASK;
-            let row = if color == WHITE {
-                1
-            } else {
-                6
-            };
+            let row = if color == WHITE { 1 } else { 6 };
             return position.row == row;
         };
-        let move_direction: i32 = if is_piece_white(piece) {
-            1
-        } else {
-            -1
-        };
+        let move_direction: i32 = if is_piece_white(piece) { 1 } else { -1 };
         let mut moves = Vec::new();
         //if no piece is blocking the way, we can move forwards one square
         let one_square_forward = Position {
@@ -424,11 +392,7 @@ impl BoardState {
         let mut moves: Vec<Position> = Vec::new();
         let current_position_index: i32 = Position::index_from_position(position) as i32;
         //array directions lead to more readable code (as of my abilities)
-        let directions: [i32; 4] = if diagonal {
-            [7, 9, -9, -7]
-        } else {
-            [1, 8, -1, -8]
-        };
+        let directions: [i32; 4] = if diagonal { [7, 9, -9, -7] } else { [1, 8, -1, -8] };
         for direction in directions {
             let mut previous_position_checked = position;
             let mut length = 1;
@@ -529,11 +493,7 @@ impl BoardState {
 
 fn fen_to_board(board_string: &&str) -> [i32; 64] {
     fn char_to_piece(piece: char) -> i32 {
-        let color_mask = if piece.is_uppercase() {
-            WHITE
-        } else {
-            BLACK
-        };
+        let color_mask = if piece.is_uppercase() { WHITE } else { BLACK };
         return color_mask
             | match piece.to_ascii_lowercase() {
                 'r' => ROOK,
