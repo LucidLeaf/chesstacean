@@ -18,7 +18,7 @@ fn read_line(prompt: &str) -> String {
 
 fn game_loop() {
     println!("Type \"exit\" at any point to stop the game");
-    let mut bs: BoardState = BoardState::new();
+    let mut bs: BoardState = BoardState::from_fen(board_state::CASTLING_TEST);
     loop {
         println!("{}", bs.full_state_str());
         if bs.is_checkmate() {

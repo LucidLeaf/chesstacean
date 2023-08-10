@@ -16,8 +16,9 @@ pub(crate) const INVALID_POSITION: Position = Position {
 const PIECE_MASK: i32 = 7;
 const COLOR_MASK: i32 = 24;
 
-const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const E4_FEN: &str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+pub const E4_FEN: &str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+pub const CASTLING_TEST: &str = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq e3 0 1";
 
 #[derive(Clone, Copy, Debug)]
 pub struct Position {
@@ -104,22 +105,6 @@ impl BoardState {
     }
 
     pub fn str(&self) -> String {
-        fn char_from_piece(piece: i32) -> char {
-            let colorless_piece = piece & PIECE_MASK;
-            let mut char: char = match colorless_piece {
-                PAWN => 'p',
-                ROOK => 'r',
-                KNIGHT => 'n',
-                BISHOP => 'b',
-                QUEEN => 'q',
-                KING => 'k',
-                _ => ' ',
-            };
-            if is_piece_white(piece) {
-                char = char.to_uppercase().to_string().remove(0);
-            }
-            return char;
-        }
         let mut result = String::new();
         for n in (0..64).rev() {
             // start from top left
@@ -171,18 +156,8 @@ impl BoardState {
         return final_string;
     }
 
-    pub fn get_en_passant_square(&self) -> Position {
-        return self.en_passant_square;
-    }
-
-    pub fn is_color_in_check(&self, color: i32) -> bool {
-        for position_index in 0..64 {
-            if self.board[position_index] == KING + color {
-                let king_position = Position::position_from_indices(position_index);
-                return self.is_position_attacked(king_position);
-            }
-        }
-        panic!("King not found \n{}", self.str());
+    pub fn to_fen(&self) -> String {
+        todo!()
     }
 
     pub fn get_piece_moves_respecting_checks(&self, position: Position) -> Vec<Position> {
@@ -195,7 +170,6 @@ impl BoardState {
         let mut moves_respecting_checks = Vec::new();
         'next_move: for move_to_check_for_check in moves_disregarding_checks {
             if piece & PIECE_MASK == KING && (move_to_check_for_check.col - position.col).abs() > 1 {
-                //todo implement castling checks checker
                 for col_in_between in position.col..move_to_check_for_check.col {
                     let position_king_moves_through = Position {
                         row: position.row,
@@ -235,12 +209,21 @@ impl BoardState {
         }
         //todo change half move counter
         if piece & PIECE_MASK == KING {
-            //todo castle both king and rook
-
-            // remove further castling rights
+            //castle both king and rook
+            if new_position.col - position.col == 2 {
+                //king side
+                new_state = new_state.set_piece_at_position(Position { row: position.row, col: 7 }, NOTHING);
+                new_state = new_state.set_piece_at_position(Position { row: position.row, col: 5 }, ROOK | (piece & COLOR_MASK));
+            }
+            if new_position.col - position.col == -2 {
+                //queen side
+                new_state = new_state.set_piece_at_position(Position { row: position.row, col: 0 }, NOTHING);
+                new_state = new_state.set_piece_at_position(Position { row: position.row, col: 3 }, ROOK | (piece & COLOR_MASK));
+            }
+            // remove castling rights
             let castling_chars = if self.color_to_move == WHITE { ["K", "Q"] } else { ["k", "q"] };
             for char in castling_chars {
-                new_state.castling_rights = self.castling_rights.replace(char, "");
+                new_state.castling_rights = new_state.castling_rights.replace(char, "");
             }
         }
         //remove castling rights for respective side
@@ -291,6 +274,16 @@ impl BoardState {
 
     pub fn is_checkmate(&self) -> bool {
         return self.get_legal_moves().len() == 0 && self.is_color_in_check(self.color_to_move);
+    }
+
+    fn is_color_in_check(&self, color: i32) -> bool {
+        for position_index in 0..64 {
+            if self.board[position_index] == KING + color {
+                let king_position = Position::position_from_indices(position_index);
+                return self.is_position_attacked(king_position);
+            }
+        }
+        panic!("King not found \n{}", self.str());
     }
 
     /// returns piece integer at the given position, position must be in bounds
@@ -495,11 +488,11 @@ impl BoardState {
         }
         //castling
         let mut directions_to_check: Vec<Vec<i32>> = Vec::new();
-        if (is_piece_white(king) && self.castling_rights.contains("K")) || (!is_piece_white(king) && self.castling_rights.contains("k")) {
+        if (is_piece_white(king) && self.castling_rights.contains("K")) || (is_piece_black(king) && self.castling_rights.contains("k")) {
             let short_directions = vec![1, 2];
             directions_to_check.push(short_directions);
         }
-        if (is_piece_white(king) && self.castling_rights.contains("Q")) || (!is_piece_white(king) && self.castling_rights.contains("q")) {
+        if (is_piece_white(king) && self.castling_rights.contains("Q")) || (is_piece_black(king) && self.castling_rights.contains("q")) {
             let long_directions = vec![-1, -2, -3];
             directions_to_check.push(long_directions);
         }
@@ -525,20 +518,38 @@ impl BoardState {
     }
 }
 
-fn fen_to_board(board_string: &&str) -> [i32; 64] {
-    fn char_to_piece(piece: char) -> i32 {
-        let color_mask = if piece.is_uppercase() { WHITE } else { BLACK };
-        return color_mask
-            | match piece.to_ascii_lowercase() {
-                'r' => ROOK,
-                'n' => KNIGHT,
-                'b' => BISHOP,
-                'q' => QUEEN,
-                'k' => KING,
-                'p' => PAWN,
-                _ => 0,
-            };
+fn char_from_piece(piece: i32) -> char {
+    let colorless_piece = piece & PIECE_MASK;
+    let mut char: char = match colorless_piece {
+        PAWN => 'p',
+        ROOK => 'r',
+        KNIGHT => 'n',
+        BISHOP => 'b',
+        QUEEN => 'q',
+        KING => 'k',
+        _ => ' ',
+    };
+    if is_piece_white(piece) {
+        char = char.to_uppercase().to_string().remove(0);
     }
+    return char;
+}
+
+fn piece_from_char(piece: char) -> i32 {
+    let color_mask = if piece.is_uppercase() { WHITE } else { BLACK };
+    return color_mask
+        | match piece.to_ascii_lowercase() {
+            'r' => ROOK,
+            'n' => KNIGHT,
+            'b' => BISHOP,
+            'q' => QUEEN,
+            'k' => KING,
+            'p' => PAWN,
+            _ => 0,
+        };
+}
+
+fn fen_to_board(board_string: &&str) -> [i32; 64] {
     let mut rank = 7;
     let mut col = 0;
     let mut board = [0; 64];
@@ -546,18 +557,17 @@ fn fen_to_board(board_string: &&str) -> [i32; 64] {
         match ch {
             '1'..='8' => col = col + (ch.to_digit(10).expect("Invalid number parsing FEN") as i32),
             'r' | 'n' | 'b' | 'q' | 'k' | 'p' | 'R' | 'N' | 'B' | 'Q' | 'K' | 'P' => {
-                let piece = char_to_piece(ch);
+                let piece = piece_from_char(ch);
                 let index = (rank * 8 + col) as usize;
                 board[index] = piece;
+                col = col + 1;
             }
             '/' => {
                 rank = rank - 1;
                 col = 0;
-                continue; // prevent setting of col to col + 1
             }
             _ => println!("Unknown fen char: {}", ch),
         }
-        col = col + 1;
     }
     let final_board = board;
     return final_board;
@@ -565,10 +575,12 @@ fn fen_to_board(board_string: &&str) -> [i32; 64] {
 
 fn is_piece_white(piece: i32) -> bool {
     let color = piece & COLOR_MASK;
-    if color == WHITE {
-        return true;
-    }
-    return false;
+    return color == WHITE;
+}
+
+fn is_piece_black(piece: i32) -> bool {
+    let color = piece & COLOR_MASK;
+    return color == BLACK;
 }
 
 fn is_opposite_color(piece_1: i32, piece_2: i32) -> bool {

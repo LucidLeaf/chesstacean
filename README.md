@@ -3,9 +3,9 @@ This is my first project in Rust.
 
 TODO
 
-    - implement castling (move rook, check if check for checks works as intended)
+    - castling: check if check for checks works as intended
     - implement promotion
-    - implement clocks
+    - implement half-move-clock
 
 Future ideas
 
