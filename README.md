@@ -3,10 +3,11 @@ This is my first project in Rust.
 
 TODO
 
-    - castling: check if check for checks works as intended
     - implement promotion
     - implement half-move-clock
+    - implement draw (stalemate, half-move-clock)
+    - generate move tree for n
 
 Future ideas
 
-    - generate move tree for n
+    - remove Position in favor of pure indices
