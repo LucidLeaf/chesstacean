@@ -19,6 +19,7 @@ const COLOR_MASK: i32 = 24;
 pub const STARTING_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 pub const E4_FEN: &str = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
 pub const CASTLING_TEST: &str = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq e3 0 1";
+pub const CHECKMATE_TEST: &str = "kr6/ppN5/8/8/8/8/8/4K3 b - - 0 1";
 
 #[derive(Clone, Copy, Debug)]
 pub struct Position {
@@ -166,26 +167,39 @@ impl BoardState {
         if piece & COLOR_MASK != self.color_to_move {
             return Vec::new();
         }
-        let moves_disregarding_checks = self.get_piece_moves_disregarding_checks(position);
+        let moves_ignoring_checks = self.get_piece_moves_ignoring_checks(position);
         let mut moves_respecting_checks = Vec::new();
-        'next_move: for move_to_check_for_check in moves_disregarding_checks {
-            if piece & PIECE_MASK == KING && (move_to_check_for_check.col - position.col).abs() > 1 {
-                for col_in_between in position.col..move_to_check_for_check.col {
+        'next_move: for new_position in moves_ignoring_checks {
+            //for each move check if we move to the piece to one of the new positions the moving side is in check
+            let mut new_positions: Vec<Position> = Vec::new();
+            if piece & PIECE_MASK == KING && (new_position.col - position.col).abs() > 1 {
+                // the king is trying to castle
+                if self.is_color_in_check(self.color_to_move) {
+                    continue;
+                }
+                //specify columns the king moves through
+                let columns = if position.col > new_position.col {
+                    new_position.col..position.col
+                } else {
+                    (position.col + 1)..(new_position.col + 1)
+                };
+                for column in columns {
                     let position_king_moves_through = Position {
                         row: position.row,
-                        col: col_in_between,
+                        col: column,
                     };
-                    let new_state = self.perform_move(position_king_moves_through, move_to_check_for_check);
-                    if new_state.is_color_in_check(self.color_to_move) {
-                        continue 'next_move;
-                    }
+                    new_positions.push(position_king_moves_through)
+                }
+            } else {
+                new_positions.push(new_position)
+            }
+            for new_position_to_check in new_positions {
+                let new_state = self.perform_move(position, new_position_to_check);
+                if new_state.is_color_in_check(self.color_to_move) {
+                    continue 'next_move;
                 }
             }
-            let new_state = self.perform_move(position, move_to_check_for_check);
-            if new_state.is_color_in_check(self.color_to_move) {
-                continue;
-            }
-            moves_respecting_checks.push(move_to_check_for_check);
+            moves_respecting_checks.push(new_position);
         }
         return moves_respecting_checks;
     }
@@ -314,7 +328,7 @@ impl BoardState {
                 if is_same_color(square, color) {
                     continue;
                 }
-                for attacked_square in self.get_piece_moves_disregarding_checks(iterator_position) {
+                for attacked_square in self.get_piece_moves_ignoring_checks(iterator_position) {
                     if attacked_square == position_to_be_checked {
                         return true;
                     }
@@ -324,7 +338,7 @@ impl BoardState {
         return false;
     }
 
-    fn get_piece_moves_disregarding_checks(&self, position: Position) -> Vec<Position> {
+    fn get_piece_moves_ignoring_checks(&self, position: Position) -> Vec<Position> {
         let piece = self.get_piece_at_position(position);
         let colorless_piece = piece & PIECE_MASK;
         let moves = match colorless_piece {
